@@ -91,7 +91,7 @@ class Game(object):
     async def aggregate(self, channel: discord.TextChannel):
         redVotes = [redUser.vote for redUser in self.red_team]
         blueVotes = [blueUser.vote for blueUser in self.blue_team]
-        if -1 in redVotes != True and -1 in blueVotes:
+        if -1 in redVotes or -1 in blueVotes:
             await channel.send("投票数が足りないようです。どなたか忘れていませんか？")
         else:
             for i, j in zip(redVotes, blueVotes): 
