@@ -253,13 +253,8 @@ async def on_message(message: discord.Message):
             await user.info.send(
                 await games[server.id].generate_current_status_text(False)
             )
-            await channel.send(
-                await games[server.id].generate_current_status_text(True)
-            )
-        else:
-            await channel.send(
-                await games[server.id].generate_current_status_text(True)
-            )
+
+        await channel.send(await games[server.id].generate_current_status_text(True))
         return
 
     if message.content == "/start":
