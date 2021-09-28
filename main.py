@@ -149,9 +149,9 @@ async def on_message(message: discord.Message):
         # TODO: この全検索、スケーラビリティやばそう
         for game in games.values():
             if user in game.red_team:
-                for j, player in enumerate(game.red_team):
+                for i, player in enumerate(game.red_team):
                     if player.info.name == message.content:
-                        user.vote = j
+                        user.vote = i
                         await user.info.send("投票が正常に行われました。")
                         return
 
