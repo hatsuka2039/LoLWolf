@@ -15,6 +15,7 @@ class User(object):
     def __init__(self, info: discord.Member):
         self.info: discord.Member = info
         self.is_wolf: bool = False
+        self.vote: int = -1 
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, User):
@@ -66,8 +67,8 @@ class Game(object):
         await channel.send("なお、DMを受け取らないように制限している場合は解除してください")
 
         # Ban/Pick相談 - 5分
-        await channel.send("*** ここから5分間のBan/Pick相談時間です ***")
-        await asyncio.sleep(240)
+        await channel.send("*** ここから3分間のBan/Pick相談時間です ***")
+        await asyncio.sleep(120)
         await channel.send("*** 残り1分です ***")
         await asyncio.sleep(60)
 
@@ -88,8 +89,14 @@ class Game(object):
         )
 
     async def aggregate(self, channel: discord.TextChannel):
-        if sum(self.red_votes) != 5 or sum(self.blue_votes) != 5:
+        redVotes = [redUser.vote for redUser in self.red_team]
+        blueVotes = [blueUser.vote for blueUser in self.blue_team]
+        if -1 in redVotes != True and -1 in blueVotes:
             await channel.send("投票数が足りないようです。どなたか忘れていませんか？")
+        else:
+            for i, j in zip(redVotes, blueVotes): 
+                self.red_votes[i] += 1
+                self.blue_votes[j] += 1
 
         await channel.send("*** 結果発表です！ ***")
         await channel.send(await self.generate_current_status_text(False))
@@ -142,16 +149,16 @@ async def on_message(message: discord.Message):
         # TODO: この全検索、スケーラビリティやばそう
         for game in games.values():
             if user in game.red_team:
-                for i, player in enumerate(game.red_team):
+                for j, player in enumerate(game.red_team):
                     if player.info.name == message.content:
-                        game.red_votes[i] += 1
+                        user.vote = j
                         await user.info.send("投票が正常に行われました。")
                         return
 
             if user in game.blue_team:
                 for i, player in enumerate(game.blue_team):
                     if player.info.name == message.content:
-                        game.blue_votes[i] += 1
+                        user.vote = i 
                         await user.info.send("投票が正常に行われました。")
                         return
 
