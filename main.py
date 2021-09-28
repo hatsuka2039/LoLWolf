@@ -283,6 +283,27 @@ async def on_message(message: discord.Message):
         else:
             await channel.send("集計要請はホストが行ってください。")
         return
+    
+    if message.content == "/list":
+        text: str = ""
+        text += "===ホスト===\n"
+        if games[server.id].host is not None:
+            text += f"{games[server.id].host.info.name} さん\n"
+        else:
+            text += "不在\n"
+
+        text += "\n===赤陣営===\n"
+        for mate in games[server.id].red_team:
+            text += f"{mate.info.name} さん\n"
+        text += f"残り {5 - len(games[server.id].red_team)} 名\n"
+
+        text += "\n===青陣営===\n"
+        for mate in games[server.id].blue_team:
+            text += f"{mate.info.name} さん\n"
+        text += f"残り {5 - len(games[server.id].blue_team)} 名\n"
+
+        await channel.send(text)
+        return
 
     if message.content == "/help":
         text: str = ""
