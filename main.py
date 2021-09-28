@@ -105,12 +105,12 @@ class Game(object):
         text += "\n===赤陣営===\n"
         for user, vote in zip(self.red_team, self.red_votes):
             text += f"{user.info.name} さん: {vote}票"
-            text += " 人狼\n" if not is_blind else "\n"
+            text += " 人狼\n" if not is_blind and user.is_wolf else "\n"
 
         text += "\n===青陣営===\n"
         for user, vote in zip(self.blue_team, self.blue_votes):
             text += f"{user.info.name} さん: {vote}票"
-            text += " 人狼\n" if not is_blind else "\n"
+            text += " 人狼\n" if not is_blind and user.is_wolf else "\n"
 
         return text
 
