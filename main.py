@@ -311,6 +311,7 @@ async def on_message(message: discord.Message):
         text += "/host : ゲームにホストとして参加します。\n"
         text += "/join [red|blue] : ゲームにプレイヤとして参加します。redまたはblueで各陣営を指定します。\n"
         text += "/quit : ゲームから抜けます。\n"
+        text += "/list : 参加状況を確認します。\n"
 
         text += "\n"
         text += "/start : ゲームを開始します。\n"
