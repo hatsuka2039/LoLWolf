@@ -15,7 +15,7 @@ class User(object):
     def __init__(self, info: discord.Member):
         self.info: discord.Member = info
         self.is_wolf: bool = False
-        self.vote: int = -1 
+        self.vote: int = -1
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, User):
@@ -94,7 +94,7 @@ class Game(object):
         if -1 in redVotes or -1 in blueVotes:
             await channel.send("投票数が足りないようです。どなたか忘れていませんか？")
         else:
-            for i, j in zip(redVotes, blueVotes): 
+            for i, j in zip(redVotes, blueVotes):
                 self.red_votes[i] += 1
                 self.blue_votes[j] += 1
 
@@ -158,7 +158,7 @@ async def on_message(message: discord.Message):
             if user in game.blue_team:
                 for i, player in enumerate(game.blue_team):
                     if player.info.name == message.content:
-                        user.vote = i 
+                        user.vote = i
                         await user.info.send("投票が正常に行われました。")
                         return
 
