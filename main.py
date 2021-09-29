@@ -148,13 +148,10 @@ class Game(object):
 
         def loop_player(text: str, team: List[User]) -> str:
             for player in team:
+                text += player.info.mention if is_mention else f"{player.info.name}\t"
+                text += f":\t{player.voted} voted "
                 text += (
-                    player.info.mention
-                    if is_mention
-                    else f"{player.info.name}\t:\t{player.voted} voted"
-                )
-                text += (
-                    " " + output["werewolf"][language]
+                    output["werewolf"][language]
                     if not is_blind and player.is_wolf
                     else "\n"
                 )
