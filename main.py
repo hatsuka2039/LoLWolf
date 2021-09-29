@@ -58,7 +58,7 @@ class Game(object):
         if self.progress.state == "in-game":
             await self.channel.send(output["GameAlreadyBegin"][language])
 
-        if len(self.red_team + self.blue_team) != 10:
+        if len(self.red_team + self.blue_team) != 2:
             await self.channel.send(output["NotEnoughMember"][language])
             return
 
@@ -69,8 +69,8 @@ class Game(object):
         self.is_host_playing: bool = self.host in self.red_team + self.blue_team
 
         # 人狼を決定する
-        self.red_team[random.randint(0, 4)].is_wolf = True
-        self.blue_team[random.randint(0, 4)].is_wolf = True
+        self.red_team[random.randint(0, 0)].is_wolf = True
+        self.blue_team[random.randint(0, 0)].is_wolf = True
 
         # ホストに全情報を送信(ホストがプレイヤでないときのみ)
         if not self.is_host_playing:
@@ -122,7 +122,7 @@ class Game(object):
             await self.channel.send(output["WarningNotInVoting"][language])
             return
 
-        if sum([player.voted for player in self.red_team + self.blue_team]) != 10:
+        if sum([player.voted for player in self.red_team + self.blue_team]) != 2:
             await self.channel.send(output["NotEnoughVote"][language])
             return
 
