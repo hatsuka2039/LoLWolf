@@ -58,7 +58,7 @@ class Game(object):
         if self.progress.state == "in-game":
             await self.channel.send(output["GameAlreadyBegin"][language])
 
-        if len(self.red_team + self.blue_team) != 2:
+        if len(self.red_team + self.blue_team) != 10:
             await self.channel.send(output["NotEnoughMember"][language])
             return
 
@@ -69,8 +69,8 @@ class Game(object):
         self.is_host_playing: bool = self.host in self.red_team + self.blue_team
 
         # 人狼を決定する
-        self.red_team[random.randint(0, 0)].is_wolf = True
-        self.blue_team[random.randint(0, 0)].is_wolf = True
+        self.red_team[random.randint(0, 4)].is_wolf = True
+        self.blue_team[random.randint(0, 4)].is_wolf = True
 
         # ホストに全情報を送信(ホストがプレイヤでないときのみ)
         if not self.is_host_playing:
@@ -122,7 +122,7 @@ class Game(object):
             await self.channel.send(output["WarningNotInVoting"][language])
             return
 
-        if sum([player.voted for player in self.red_team + self.blue_team]) != 2:
+        if sum([player.voted for player in self.red_team + self.blue_team]) != 10:
             await self.channel.send(output["NotEnoughVote"][language])
             return
 
@@ -199,29 +199,31 @@ async def on_message(message: discord.Message):
         isinstance(message.channel, discord.DMChannel)
         and client.user == message.channel.me
     ):
-        # IDEA: 投票し直しを実装するべきか？
-        if author.is_vote:
-            await author.info.send(output["AlreadyVoted"][language])
+
+        async def check_correct_vote(voter: User, team: List[User]) -> bool:
+            if voter not in team:
+                return False
+
+            # IDEA: 投票し直しを実装するべきか？
+            i = team.index(voter)
+            if team[i].is_vote:
+                await voter.info.send(output["AlreadyVoted"][language])
+
+            for player in team:
+                if player.info.name == message.content:
+                    team[i].is_vote = True
+                    player.voted += 1
+                    await voter.info.send(output["VoteAccepted"][language])
+                    return True
+            return False
 
         # OPTIMIZE: この全検索、スケーラビリティやばそう
         for game in games.values():
-
-            async def check_correct_vote(voter: User, team: List[User]) -> bool:
-                if voter in team:
-                    for player in team:
-                        # あえて、自分に投票できる遊びを残しておく
-                        if player.info.name == message.content:
-                            voter.is_vote = True
-                            player.voted += 1
-                            await voter.info.send(output["VoteAccepted"][language])
-                            return True
-                return False
-
-            if check_correct_vote(author, game.red_team):
-                return
-
-            if check_correct_vote(author, game.blue_team):
-                return
+            if game.progress.state == "voting":
+                if await check_correct_vote(author, game.red_team):
+                    return
+                if await check_correct_vote(author, game.blue_team):
+                    return
 
         await author.info.send(output["WarningInvalidVote"][language])
         return
