@@ -54,15 +54,15 @@ class Game(object):
         self.red_team: List[User] = []
         self.blue_team: List[User] = []
 
-    async def start(self):
+    async def start(self, time: int = 180):
         if self.progress.state == "in-game":
-            await self.channel.send("ゲームが既に開始されています。")
+            await self.channel.send(output["GameAlreadyBegin"][language])
 
         if len(self.red_team + self.blue_team) != 10:
-            await self.channel.send("必要メンバー数に達していません。")
+            await self.channel.send(output["NotEnoughMember"][language])
             return
 
-        await self.channel.send("*** ゲームを開始します！ ***")
+        await self.channel.send(output["BeginGame"][language])
         self.progress.begin()
 
         # プレイヤがホストを兼任しているかどうかの確認
@@ -72,92 +72,111 @@ class Game(object):
         self.red_team[random.randint(0, 4)].is_wolf = True
         self.blue_team[random.randint(0, 4)].is_wolf = True
 
-        # ホストに全情報を送信
+        # ホストに全情報を送信(ホストがプレイヤでないときのみ)
         if not self.is_host_playing:
-            await self.host.info.send(await self.generate_current_status_text(False))
+            await self.host.info.send(await self.current_status(False))
 
         # テキストチャットに役職を伏せた全情報を送信
-        await self.channel.send(await self.generate_current_status_text(True))
+        await self.channel.send(await self.current_status(True, True))
 
         # 個別にDMで連絡
         for player in self.red_team + self.blue_team:
-            await player.info.send("あなたは{}です。".format("人狼" if player.is_wolf else "村人"))
+            await player.info.send(
+                output["WhatYouAre"][language].format(
+                    output["werewolf"][language]
+                    if player.is_wolf
+                    else output["villager"][language]
+                )
+            )
 
-        await self.channel.send(
-            '*** 役職が決定されました！DMを確認してください\n***もしDMが届かない人がいる場合は"/restart"コマンドを実行してください。\nなお、DMを受け取らないように制限している場合は解除してください。'
-        )
+        await self.channel.send(output["DecidedRoles"][language])
 
-        # Ban/Pick相談 - 5分
-        # TODO: パラメータを指定できるようにする
-        await self.channel.send("*** ここから3分間のBan/Pick相談時間です ***")
-        await self.asyncio.sleep(120)
-        await self.channel.send("*** 残り1分です ***")
-        await asyncio.sleep(60)
+        # Ban/Pick相談
+        await self.channel.send(output["AnnounceBanPick"][language].format(time))
+        await asyncio.sleep(time)
 
         # 試合開始コール
-        await self.channel.send("*** 相談時間は終わりです。試合を開始してください。GLHF!! ***")
+        await self.channel.send(output["AnnounceStartGame"][language])
         self.progress.start()
 
-    async def finish(self):
+    async def finish(self, time: int = 300):
         if self.progress.state != "in-game":
-            await self.channel.send("まだゲームは開始されていないようです。")
+            await self.channel.send(output["WarningNotInGame"][language])
             return
 
-        await self.channel.send("*** 試合お疲れさまでした！ ***")
+        await self.channel.send(output["AnnounceGG"][language])
         self.progress.finish()
 
-        await self.channel.send("*** ここから5分間のシンキング・相談タイムです！ ***")
-        await asyncio.sleep(240)
-        await self.channel.send("*** 残り1分です ***")
-        await asyncio.sleep(60)
+        await self.channel.send(
+            output["AnnounceBeginThinkingTime"][language].format(time)
+        )
+        await asyncio.sleep(time)
 
-        await self.channel.send("*** シンキング・相談タイム終了です ***")
+        await self.channel.send(output["AnnounceEndThinkingTime"][language])
         self.progress.vote()
 
-        await self.channel.send(
-            "*** 参加者の皆様は私にDMで投票する人の名前を教えてください。名前は正確に入力してくださいね！敬称は不要です！ ***"
-        )
+        await self.channel.send(output["AnnounceVoting"][language])
 
     async def aggregate(self):
         if self.progress.state != "voting":
-            await self.channel.send("まだ投票期間では無いようです。")
+            await self.channel.send(output["WarningNotInVoting"][language])
 
         if sum([player.voted for player in self.red_team + self.blue_team]) != 10:
-            await self.channel.send("投票数が足りないようです。現在の投票状況は/statusで確認することができます。")
+            await self.channel.send(output["NotEnoughVote"][language])
 
-        await self.channel.send("*** 結果発表です！ ***")
+        await self.channel.send(output["AnnounceResult"][language])
 
         # TODO: 点数計算などもここで行う
-        await self.channel.send(await self.generate_current_status_text(False))
+        await self.channel.send(await self.current_status(False, True))
 
-    async def generate_current_status_text(self, is_blind: bool) -> str:
+    async def current_status(
+        self, is_blind: bool = True, is_mention: bool = False
+    ) -> str:
         text: str = ""
-        text += "===ホスト===\n"
+        text += "=== Host ===\n"
         if self.host is not None:
-            text += f"{self.host.info.name} さん\n"
+            text += (
+                self.host.info.mention
+                if is_mention
+                else f"{self.host.info.display_name}"
+            )
         else:
-            text += "不在\n"
+            text += "Not exist"
+        text += "\n\n"
 
-        text += "\n===赤陣営===\n"
-        for player in self.red_team:
-            text += f"{player.info.name} さん: {player.voted}票"
-            text += " 人狼\n" if not is_blind and player.is_wolf else "\n"
+        def loop_player(text: str, team: List[User]) -> str:
+            for player in team:
+                text += (
+                    player.info.mention
+                    if is_mention
+                    else f"{player.info.name}\t:\t{player.voted} voted"
+                )
+                text += (
+                    " " + output["werewolf"][language]
+                    if not is_blind and player.is_wolf
+                    else "\n"
+                )
+            text += "\n"
+            return text
 
-        text += "\n===青陣営===\n"
-        for player in self.blue_team:
-            text += f"{player.info.name} さん: {player.voted}票"
-            text += " 人狼\n" if not is_blind and player.is_wolf else "\n"
+        text += "=== Red Side ===\n"
+        text = loop_player(text, self.red_team)
+
+        text += "=== Blue Side ===\n"
+        text = loop_player(text, self.blue_team)
 
         return text
 
 
 client = discord.Client()
 games: Dict[discord.TextChannel, Game] = {}
+output = json.load(open("OutputMessage.json", "r"))
+language = "ja"
 
 
 @client.event
 async def on_ready():
-    print("LoL人狼ボット起動しました")
+    print("Bot Started")
 
 
 @client.event
@@ -180,7 +199,7 @@ async def on_message(message: discord.Message):
     ):
         # IDEA: 投票し直しを実装するべきか？
         if author.is_vote:
-            await author.info.send("既に投票されているようです。")
+            await author.info.send(output["AlreadyVoted"][language])
 
         # OPTIMIZE: この全検索、スケーラビリティやばそう
         for game in games.values():
@@ -192,7 +211,7 @@ async def on_message(message: discord.Message):
                         if player.info.name == message.content:
                             voter.is_vote = True
                             player.voted += 1
-                            await voter.info.send("再投票が正常に行われました。")
+                            await voter.info.send(output["VoteAccepted"][language])
                             return True
                 return False
 
@@ -202,7 +221,7 @@ async def on_message(message: discord.Message):
             if check_correct_vote(author, game.blue_team):
                 return
 
-        await author.info.send("無効な投票です。")
+        await author.info.send(output["WarningInvalidVote"][language])
         return
 
     # スラッシュから始まる文言以外は無視する
@@ -218,129 +237,112 @@ async def on_message(message: discord.Message):
         if author == games[channel].host:
             if channel in games:
                 del games[channel]
-            await channel.send("ゲームがリセットされました。")
+            await channel.send(output["ResetGame"][language])
         else:
-            await channel.send("ゲームのリセットはホストのみが可能です。")
+            await channel.send(output["WarningHostOnly"][language])
         return
 
     # ゲームのホストを登録
     if message.content.startswith("/host"):
         if games[channel].host is not None:
-            await reply("ホストは既に登録済みです。")
+            await reply(output["HostAlreadyJoined"][language])
         else:
             games[channel].host = author
-            await reply("ホストとして登録されました。")
+            await reply(output["HostJoined"][language])
         return
 
     # ゲームの参加者を登録
     if message.content.startswith("/join"):
         # 既にどちらかの陣営に参加している場合
         if author in games[channel].blue_team + games[channel].red_team:
-            await reply("既にゲームに参加されているようです。")
+            await reply(output["AlreadyJoined"][language])
         else:
             # 赤陣営に追加
             if "red" in message.content:
                 # 各陣営は5人まで
                 if len(games[channel].red_team) >= 5:
-                    await channel.send("赤陣営はいっぱいのようです。")
+                    await channel.send(output["RedTeamFull"][language])
                     return
 
                 games[channel].red_team.append(author)
-                await reply("赤陣営に追加されました。")
+                await reply(output["RedTeamJoined"][language])
 
             # 青陣営に追加
             elif "blue" in message.content:
                 # 各陣営は5人まで
                 if len(games[channel].blue_team) >= 5:
-                    await reply("青陣営はいっぱいのようです。")
+                    await reply(output["BlueTeamFull"][language])
                     return
 
                 games[channel].blue_team.append(author)
-                await reply("青陣営に追加されました。")
+                await reply(output["BlueTeamJoined"][language])
 
             # 陣営が無効または入力されていない場合
             else:
-                await reply('無効な陣営です。"red"もしくは"blue"で指定してください。')
+                await reply(output["WarningInvalidTeam"][language])
         return
 
     if message.content == "/quit":
         # 赤陣営から抜ける
         if author in games[channel].red_team:
             games[channel].red_team.remove(author)
-            await reply("赤陣営から抜けました。")
+            await reply(output["QuitGame"][language])
 
         # 青陣営から抜ける
         elif author in games[channel].blue_team:
             games[channel].blue_team.remove(author)
-            await reply("青陣営から抜けました。")
+            await reply(output["QuitGame"][language])
 
         # ホストを辞める
         elif author == games[channel].host:
             games[channel].host = None
-            await reply("ホストでは無くなりました。")
+            await reply(output["QuitGame"][language])
 
         # どちらの陣営でもない場合
         else:
-            await reply("まだゲームに参加していないようです。")
-
+            await reply(output["NotJoinedYet"][language])
         return
 
     if message.content == "/status":
-        if author == games[channel].host:
-            # ホストがこのコマンドを実行した場合、DMに追加の情報を送信する
-            await author.info.send(
-                await games[channel].generate_current_status_text(False)
-            )
-        await channel.send(await games[channel].generate_current_status_text(True))
+        await channel.send(await games[channel].current_status(True))
         return
 
     if message.content == "/start":
         if author == games[channel].host:
             await games[channel].start()
         else:
-            await reply("ゲーム開始はホストが行ってください。")
+            await reply(output["WarningHostOnly"][language])
         return
 
     if message.content == "/restart":
-        if author == games[channel].host:
-            games[channel].is_start = False
-            await games[channel].start()
-        else:
-            await reply("ゲームの再開始はホストが行ってください。")
+        await reply("すみません、こちらは未実装です。")
+        # if author == games[channel].host:
+        #     games[channel].is_start = False
+        #     await games[channel].start()
+        # else:
+        #     await reply(output["WarningHostOnly"][language])
         return
 
     if message.content == "/finish":
         if author == games[channel].host:
             await games[channel].finish()
         else:
-            await reply("ゲーム終了はホストが行ってください。")
+            await reply(output["WarningHostOnly"][language])
         return
 
     if message.content == "/aggregate":
         if author == games[channel].host:
             await games[channel].aggregate()
         else:
-            await reply("集計要請はホストが行ってください。")
+            await reply(output["WarningHostOnly"][language])
         return
 
     if message.content == "/help":
-        text: str = ""
-        text += "/reset : ゲームを完全に初期化します。\n"
-        text += "/host : ゲームにホストとして参加します。\n"
-        text += "/join [red|blue] : ゲームにプレイヤとして参加します。redまたはblueで各陣営を指定します。\n"
-        text += "/quit : ゲームから抜けます。\n"
-
-        text += "\n"
-        text += "/start : ゲームを開始します。\n"
-        text += "/restart : 途中不具合があった場合に再スタートします。\n"
-        text += "/finish : LoLの試合が終了したことを合図します。\n"
-        text += "/aggregate : 投票の結果を表示します。\n"
-
-        await channel.send(text)
+        await channel.send(output["HelpMessage"][language])
         return
 
     # どのコマンドにも一致しない場合
-    await channel.send('お困りですか？"/help"でコマンド一覧を取得できます。')
+    await reply(output["HelpMessage2"][language])
 
 
 client.run(TOKEN)
