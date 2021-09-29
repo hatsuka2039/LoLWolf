@@ -3,6 +3,7 @@ import random
 import asyncio
 import os
 import json
+from transitions import Machine
 from typing import List, Dict, Optional
 
 TOKEN = os.environ["DISCORD_TOKEN"]
@@ -27,70 +28,100 @@ class User(object):
 
 class Game(object):
     def __init__(self, channel: discord.TextChannel):
-        self.is_start: bool = False
+        states = [
+            "pre-game",
+            "ban-pick",
+            "in-game",
+            "thinking-time",
+            "voting",
+            "end",
+        ]
+        transitions = [
+            {"trigger": "begin", "source": "pre-game", "dest": "ban-pick"},
+            {"trigger": "start", "source": "ban-pick", "dest": "in-game"},
+            {"trigger": "finish", "source": "in-game", "dest": "thinking-time"},
+            {"trigger": "vote", "source": "thinking-time", "dest": "voting"},
+            {"trigger": "aggregate", "source": "voting", "dest": "end"},
+        ]
+        self.progress: Machine = Machine(
+            states=states,
+            transitions=transitions,
+            initial="pre-game",
+            auto_transitions=False,
+        )
         self.channel: discord.TextChannel = channel
         self.host: Optional[User] = None
         self.red_team: List[User] = []
         self.blue_team: List[User] = []
-        self.red_votes: List[int] = [0] * 5
-        self.blue_votes: List[int] = [0] * 5
 
     async def start(self):
-        if self.host is None:
-            await self.channel.send("ホストが不在です。")
-            # return
+        if self.progress.state == "in-game":
+            await self.channel.send("ゲームが既に開始されています。")
 
-        if len(self.red_team) != 5 or len(self.blue_team) != 5:
-            await self.channel.send("各陣営の必要メンバー数に達していません。")
+        if len(self.red_team + self.blue_team) != 10:
+            await self.channel.send("必要メンバー数に達していません。")
             return
 
-        if self.is_start:
-            await self.channel.send("ゲームが既に開始されています。中断したい場合は")
-
         await self.channel.send("*** ゲームを開始します！ ***")
-        self.is_start = True
+        self.progress.begin()
+
+        # プレイヤがホストを兼任しているかどうかの確認
+        self.is_host_playing: bool = self.host in self.red_team + self.blue_team
 
         # 人狼を決定する
         self.red_team[random.randint(0, 4)].is_wolf = True
         self.blue_team[random.randint(0, 4)].is_wolf = True
 
         # ホストに全情報を送信
-        await self.host.info.send(await self.generate_current_status_text(False))
+        if not self.is_host_playing:
+            await self.host.info.send(await self.generate_current_status_text(False))
 
         # テキストチャットに役職を伏せた全情報を送信
         await self.channel.send(await self.generate_current_status_text(True))
 
         # 個別にDMで連絡
-        for user in self.red_team + self.blue_team:
-            await user.info.send("あなたは{}です。".format("人狼" if user.is_wolf else "村人"))
+        for player in self.red_team + self.blue_team:
+            await player.info.send("あなたは{}です。".format("人狼" if player.is_wolf else "村人"))
 
-        await self.channel.send("*** 役職が決定されました！DMを確認してください ***")
-        await self.channel.send('もしDMが届かない人がいる場合は"/restart"コマンドを実行してください')
-        await self.channel.send("なお、DMを受け取らないように制限している場合は解除してください")
+        await self.channel.send(
+            '*** 役職が決定されました！DMを確認してください\n***もしDMが届かない人がいる場合は"/restart"コマンドを実行してください。\nなお、DMを受け取らないように制限している場合は解除してください。'
+        )
 
         # Ban/Pick相談 - 5分
+        # TODO: パラメータを指定できるようにする
         await self.channel.send("*** ここから3分間のBan/Pick相談時間です ***")
         await self.asyncio.sleep(120)
         await self.channel.send("*** 残り1分です ***")
         await asyncio.sleep(60)
 
         # 試合開始コール
-        if self.is_start:
-            await self.channel.send("*** 相談時間は終わりです。試合を開始してください。GLHF!! ***")
+        await self.channel.send("*** 相談時間は終わりです。試合を開始してください。GLHF!! ***")
+        self.progress.start()
 
     async def finish(self):
+        if self.progress.state != "in-game":
+            await self.channel.send("まだゲームは開始されていないようです。")
+            return
+
         await self.channel.send("*** 試合お疲れさまでした！ ***")
+        self.progress.finish()
+
         await self.channel.send("*** ここから5分間のシンキング・相談タイムです！ ***")
         await asyncio.sleep(240)
         await self.channel.send("*** 残り1分です ***")
         await asyncio.sleep(60)
 
         await self.channel.send("*** シンキング・相談タイム終了です ***")
+        self.progress.vote()
+
         await self.channel.send(
             "*** 参加者の皆様は私にDMで投票する人の名前を教えてください。名前は正確に入力してくださいね！敬称は不要です！ ***"
         )
 
     async def aggregate(self):
+        if self.progress.state != "voting":
+            await self.channel.send("まだ投票期間では無いようです。")
+
         if sum([player.voted for player in self.red_team + self.blue_team]) != 10:
             await self.channel.send("投票数が足りないようです。現在の投票状況は/statusで確認することができます。")
 

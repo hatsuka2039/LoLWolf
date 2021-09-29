@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 "discord.py" = {extras = ["voice"], version = "*"}
+transitions = "*"
 
 [dev-packages]
 flake8 = "*"
