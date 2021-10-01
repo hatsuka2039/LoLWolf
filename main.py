@@ -58,7 +58,7 @@ class Game(object):
         if self.progress.state == "in-game":
             await self.channel.send(output["GameAlreadyBegin"][language])
 
-        if len(self.red_team + self.blue_team) != 2:
+        if len(self.red_team + self.blue_team) != 10:
             await self.channel.send(output["NotEnoughMember"][language])
             return
 
@@ -122,7 +122,7 @@ class Game(object):
             await self.channel.send(output["WarningNotInVoting"][language])
             return
 
-        if sum([player.voted for player in self.red_team + self.blue_team]) != 2:
+        if sum([player.voted for player in self.red_team + self.blue_team]) != 10:
             await self.channel.send(output["NotEnoughVote"][language])
             return
 
