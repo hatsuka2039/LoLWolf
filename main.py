@@ -205,6 +205,7 @@ async def on_message(message: discord.Message):
             i = team.index(voter)
             if team[i].is_vote:
                 await voter.info.send(output["AlreadyVoted"][language])
+                return False
 
             for player in team:
                 if player.info.name == message.content:
