@@ -69,8 +69,8 @@ class Game(object):
         self.is_host_playing: bool = self.host in self.red_team + self.blue_team
 
         # 人狼を決定する
-        self.red_team[random.randint(0, 0)].is_wolf = True
-        self.blue_team[random.randint(0, 0)].is_wolf = True
+        self.red_team[random.randint(0, 4)].is_wolf = True
+        self.blue_team[random.randint(0, 4)].is_wolf = True
 
         # ホストに全情報を送信(ホストがプレイヤでないときのみ)
         if not self.is_host_playing:
