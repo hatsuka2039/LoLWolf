@@ -315,7 +315,7 @@ class Game(object):
         def loop_player(text: str, team: List[User]) -> str:
             for i, player in enumerate(team):
                 text += "Player {}:\t".format(i + 1)
-                text += player.info.mention if is_mention else f"{player.info.name}\t"
+                text += player.info.mention if is_mention else f"{player.info.display_name}\t"
                 text += " {}".format("投票済み" if player.is_vote else "未投票")
                 text += output["werewolf"][language] if not is_blind and player.is_wolf else ""
                 text += "\n"
