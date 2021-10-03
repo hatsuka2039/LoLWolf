@@ -489,9 +489,6 @@ async def on_message(message: discord.Message):
     if not message.content.startswith("/"):
         return
 
-    # スラッシュコマンドは削除する
-    await message.delete()
-
     channel: discord.TextChannel = message.channel
     author: User = User(message.author)
     commands = message.content.split()
@@ -515,6 +512,9 @@ async def on_message(message: discord.Message):
                     return
 
         return
+
+    # スラッシュコマンドは削除する
+    await message.delete()
 
     # もしコマンド受付が初回だった場合はゲームオブジェクトを作成
     if channel not in games:
