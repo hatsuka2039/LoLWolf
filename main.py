@@ -509,13 +509,9 @@ async def on_message(message: discord.Message):
             return
 
         if commands[0] == "/name":
-            if len(commands) != 2:
-                await author.info.send(output["WarningInvalidCommand"][language])
-                return
-
             for game in games.values():
                 if await game.is_exist(author):
-                    await game.inform_summoner_name(author, commands[1])
+                    await game.inform_summoner_name(author, message.content[6:])
                     return
 
         return
