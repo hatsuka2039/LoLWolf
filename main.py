@@ -38,7 +38,8 @@ class User(object):
 
 
 class Game(object):
-    MAX_TEAMMATES = 5
+    MAX_TEAMMATES = 1
+    MAX_TIMELIMIT = 600
 
     def __init__(self, channel: discord.TextChannel):
         states = [
@@ -79,7 +80,16 @@ class Game(object):
     def only_player(func):
         async def wrapper(self, user: User, *args, **kwargs):
             if not await self._is_player(user):
-                await self._reply(user, "プレイヤーのみ実行できます。")
+                await self._reply(user, output["WarningPlayerOnly"][language])
+                return
+            await func(self, user, *args, **kwargs)
+
+        return wrapper
+
+    def only_pre_game(func):
+        async def wrapper(self, user: User, *args, **kwargs):
+            if self.progress.state != "pre-game":
+                await self._reply(user, output["NotInPreGame"][language])
                 return
             await func(self, user, *args, **kwargs)
 
@@ -118,18 +128,16 @@ class Game(object):
     async def is_exist(self, user: User) -> bool:
         return await self._is_host(user) or await self._is_player(user)
 
+    @only_pre_game
     async def join_as_host(self, user: User):
         if self.host is None:
             self.host = user
-            await self._reply(user, "ホストとして登録されました。")
+            await self._reply(user, output["HostJoined"][language])
         else:
-            await self._reply(user, "既にホストがいます。")
+            await self._reply(user, output["HostAlreadyExist"][language])
 
+    @only_pre_game
     async def join_as_player(self, user: User, team: str):
-        if self.progress.state != "pre-game":
-            await self._reply(user, "pre-game中では無いため、参加できません。")
-            return
-
         if await self._is_player(user):
             await self._reply(user, output["AlreadyJoined"][language])
             return
@@ -141,7 +149,7 @@ class Game(object):
 
             self.blue_team.append(user)
             await self._reply(user, output["BlueTeamJoined"][language])
-            await user.info.send("/name [あなたのサモナーネーム]で名前を教えてください。")
+            await user.info.send(output["AnnounceInformYourName"][language])
         elif team == "red":
             if len(self.red_team) >= Game.MAX_TEAMMATES:
                 await self._reply(user, output["RedTeamFull"][language])
@@ -149,11 +157,12 @@ class Game(object):
 
             self.red_team.append(user)
             await self._reply(user, output["RedTeamJoined"][language])
-            await user.info.send("/name [あなたのサモナーネーム]で名前を教えてください。")
+            await user.info.send(output["AnnounceInformYourName"][language])
         else:
             await self._reply(user, output["WarningInvalidTeam"][language])
 
     @only_player
+    @only_pre_game
     async def inform_summoner_name(self, user: User, summoner_name: str):
         url = "https://jp1.api.riotgames.com/lol/summoner/v4/summoners/by-name/{}".format(
             urllib.parse.quote(summoner_name)
@@ -189,20 +198,14 @@ class Game(object):
             self.red_team[index].summoner_id = result.json()["id"]
 
     @only_host
+    @only_pre_game
     async def quit_host(self, user: User):
-        if self.progress.state != "pre-game":
-            await self._reply(user, "pre-game中では無いため、抜けられません。")
-            return
-
         self.host = None
         await self._reply(user, "ホストを辞めました。")
 
     @only_player
+    @only_pre_game
     async def quit_player(self, user: User, team: str):
-        if self.progress.state != "pre-game":
-            await self._reply(user, "pre-game中では無いため、抜けられません。")
-            return
-
         if team not in ["red", "blue"]:
             await self._reply(user, output["WarningInvalidTeam"][language])
             return
@@ -219,16 +222,13 @@ class Game(object):
         self.blue_team = []
         self.red_team = []
         self.progress.set_state("pre-game")
-        await self.channel.send("ゲームがリセットされました。")
+        await self.channel.send(output["ResetGame"][language])
 
     @only_host
+    @only_pre_game
     async def start(self, user: User, time: int = 180):
-        if time <= 0 or time > 600:
-            await self.channel.send("指定可能な秒数は600までです。")
-            return
-
-        if self.progress.state != "pre-game":
-            await self.channel.send("開始可能な状態ではありません。")
+        if time <= 0 or time > Game.MAX_TIMELIMIT:
+            await self.channel.send(output["MaxTimeLimit"][language].format(Game.MAX_TIMELIMIT))
             return
 
         if self.progress.state == "in-game":
@@ -241,6 +241,7 @@ class Game(object):
 
         for player in self.blue_team + self.red_team:
             if player.summoner_name is None:
+                # TODO: 未登録プレイヤー一覧を表示する
                 await self.channel.send("サモナーネーム未登録のプレイヤーがいます。")
                 return
 
@@ -256,10 +257,10 @@ class Game(object):
 
         # ホストに全情報を送信(ホストがプレイヤでないときのみ)
         if not self.is_host_playing:
-            await self.host.info.send(await self.get_current_status(False))
+            await self.host.info.send(embed=await self.get_current_status(False))
 
         # テキストチャットに役職を伏せた全情報を送信
-        await self.channel.send(await self.get_current_status(True, True))
+        await self.channel.send(embed=await self.get_current_status(True, True))
 
         # 個別にDMで連絡
         for player in self.red_team + self.blue_team:
@@ -287,6 +288,8 @@ class Game(object):
                 await self.channel.send("アクティブなゲームを探しています。")
 
             await asyncio.sleep(30)
+            if self.progress.state != "in-game":
+                return
 
             url = "https://jp1.api.riotgames.com/lol/spectator/v4/active-games/by-summoner/{}".format(
                 self.red_team[0].summoner_id
@@ -327,8 +330,8 @@ class Game(object):
 
     @only_host
     async def finish(self, user: User, time: int = 300):
-        if time <= 0 or time > 600:
-            await self.channel.send("指定可能な秒数は600までです。")
+        if time <= 0 or time > Game.MAX_TIMELIMIT:
+            await self.channel.send(output["MaxTimeLimit"][language].format(Game.MAX_TIMELIMIT))
             return
 
         if self.progress.state != "in-game":
@@ -373,11 +376,11 @@ class Game(object):
     @only_player
     async def vote(self, voter: User, vote_to: int) -> bool:
         if self.progress.state != "voting":
-            await voter.info.send("投票期間ではありません。")
+            await voter.info.send(output["NotVotingProcess"][language])
             return False
 
         if vote_to <= 0 or vote_to > Game.MAX_TEAMMATES:
-            await voter.info.send("無効な投票先です。")
+            await voter.info.send(output["InvalidVoteTarget"][language])
             return False
 
         team = self.red_team if voter in self.red_team else self.blue_team
@@ -390,7 +393,7 @@ class Game(object):
 
         # 投票不可能な対象の場合 (再投票の場合など)
         if not team[vote_to - 1].is_votable:
-            await voter.info.send("投票不可能な対象です。")
+            await voter.info.send(output["InvalidVoteTarget"][language])
             return False
 
         team[i].is_vote = True
@@ -399,34 +402,34 @@ class Game(object):
         await voter.info.send(output["VoteAccepted"][language])
         return True
 
-    async def get_current_status(self, is_blind: bool = True, is_mention: bool = False):
-        text = "=== Game Stats ===\n"
-        text += self.progress.state
-        text += "\n\n=== Host ===\n"
-        if self.host is not None:
-            text += self.host.info.mention if is_mention else f"{self.host.info.display_name}"
-        else:
-            text += "Not exist"
-        text += "\n\n"
+    async def get_current_status(self, is_blind: bool = True, is_mention: bool = False) -> discord.Embed:
+        embed = discord.Embed(title="Current Game Status", description="", color=0x00FF00)
+        embed.add_field(name="Game Progress", value=self.progress.state)
 
-        def loop_player(text: str, team: List[User]) -> str:
+        if self.host is not None:
+            text = self.host.info.mention if is_mention else f"{self.host.info.display_name}"
+        else:
+            text = "Not exist"
+        embed.add_field(name="Host", value=text, inline=False)
+
+        def loop_player(team: List[User]) -> str:
+            if len(team) == 0:
+                return "Not exist"
+            text = ""
             for i, player in enumerate(team):
                 text += "Player{} ({}):\t".format(i + 1, player.champion_name)
                 text += player.info.mention if is_mention else f"{player.info.display_name}"
                 text += "({})".format(player.summoner_name)
-                text += "\t{}".format("投票済み" if player.is_vote else "未投票")
+                text += "\t{}".format("voted" if player.is_vote else "not voted")
                 text += "\t" + output["werewolf"][language] if not is_blind and player.is_wolf else ""
                 text += "\n"
             text += "\n"
             return text
 
-        text += "=== Blue Side (Left Side) ===\n"
-        text = loop_player(text, self.blue_team)
+        embed.add_field(name="Blue side (Left side)", value=loop_player(self.blue_team), inline=False)
+        embed.add_field(name="Red side (Right side)", value=loop_player(self.red_team))
 
-        text += "=== Red Side (Right Side) ===\n"
-        text = loop_player(text, self.red_team)
-
-        return text
+        return embed
 
 
 client = discord.Client()
@@ -452,6 +455,9 @@ async def on_message(message: discord.Message):
     if not message.content.startswith("/"):
         return
 
+    # スラッシュコマンドは削除する
+    await message.delete()
+
     channel: discord.TextChannel = message.channel
     author: User = User(message.author)
     commands = message.content.split()
@@ -460,7 +466,7 @@ async def on_message(message: discord.Message):
     if isinstance(message.channel, discord.DMChannel) and client.user == message.channel.me:
         if commands[0] == "/vote":
             if len(commands) != 2 or not commands[1].isdecimal():
-                await author.info.send("投票先を整数で入力してください。")
+                await author.info.send(output["WarningInvalidCommand"][language])
                 return
 
             for game in games.values():
@@ -470,7 +476,7 @@ async def on_message(message: discord.Message):
 
         if commands[0] == "/name":
             if len(commands) != 2:
-                await author.info.send("サモナーネームを入力してください。")
+                await author.info.send(output["WarningInvalidCommand"][language])
                 return
 
             for game in games.values():
@@ -491,7 +497,7 @@ async def on_message(message: discord.Message):
 
     if commands[0] == "/join":
         if len(commands) != 2:
-            await channel.send(author.info.mention + "無効なコマンドです。")
+            await channel.send(author.info.mention + output["WarningInvalidCommand"][language])
             return
 
         if commands[1] == "host":
@@ -502,7 +508,7 @@ async def on_message(message: discord.Message):
 
     if commands[0] == "/quit":
         if len(commands) != 2:
-            await channel.send(author.info.mention + "無効なコマンドです。")
+            await channel.send(author.info.mention + output["WarningInvalidCommand"][language])
             return
 
         if commands[1] == "host":
@@ -512,7 +518,7 @@ async def on_message(message: discord.Message):
         return
 
     if commands[0] == "/status":
-        await channel.send(await games[channel].get_current_status(True))
+        await channel.send(embed=await games[channel].get_current_status(True))
         return
 
     if commands[0] == "/start":
@@ -520,7 +526,7 @@ async def on_message(message: discord.Message):
             if commands[1].isdecimal():
                 await games[channel].start(author, int(commands[1]))
             else:
-                await channel.send("不正な引数です。")
+                await channel.send(output["WarningInvalidCommand"][language])
         else:
             await games[channel].start(author)
         return
@@ -534,7 +540,7 @@ async def on_message(message: discord.Message):
             if commands[1].isdecimal():
                 await games[channel].finish(author, int(commands[1]))
             else:
-                await channel.send("不正な引数です。")
+                await channel.send(output["WarningInvalidCommand"][language])
         else:
             await games[channel].finish(author)
         return
@@ -544,11 +550,20 @@ async def on_message(message: discord.Message):
         return
 
     if commands[0] == "/help":
-        await channel.send(output["HelpMessage"][language])
+        embed = discord.Embed(title="Help", color=0x0000FF)
+        embed.add_field(name=":comet: /reset", value=output["HelpReset"][language])
+        embed.add_field(name=":angel: /join host", value=output["HelpJoinHost"][language])
+        embed.add_field(name=":person_raising_hand: /join [blue|red]", value=output["HelpJoinTeams"][language])
+        embed.add_field(name=":gloves: /quit [host|blue|red]", value=output["HelpQuit"][language])
+        embed.add_field(name=":gear: /status", value=output["HelpStatus"][language])
+        embed.add_field(name=":video_game: /start", value=output["HelpStart"][language])
+        embed.add_field(name=":alarm_clock: /finish", value=output["HelpFinish"][language])
+        embed.add_field(name=":desktop: /aggregate", value=output["HelpAggregate"][language])
+        await channel.send(embed=embed)
         return
 
     # どのコマンドにも一致しない場合
-    await channel.send(output["HelpMessage2"][language])
+    await channel.send(output["HelpMessage"][language])
 
 
 client.run(TOKEN)
