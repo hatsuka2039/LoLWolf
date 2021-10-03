@@ -282,11 +282,11 @@ class Game(object):
         self.progress.start()
 
         count: int = 0
-        while self.progress.state == "in-game" or count >= 30:
-            if count % 5 == 0:
+        while self.progress.state == "in-game" or count >= 600:
+            if count % 30 == 0:
                 await self.channel.send("アクティブなゲームを探しています。")
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(1)
             if self.progress.state != "in-game":
                 return
 
