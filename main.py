@@ -37,7 +37,7 @@ class User(object):
 
 
 class Game(object):
-    MAX_TEAMMATES = 1
+    MAX_TEAMMATES = 5
     MAX_TIMELIMIT = 600
 
     def __init__(self, channel: discord.TextChannel):
@@ -356,16 +356,50 @@ class Game(object):
             await self.channel.send(output["WarningNotInVoting"][language])
             return
 
-        if sum([player.voted_from for player in self.red_team + self.blue_team]) != 2 * Game.MAX_TEAMMATES:
+        if not all([player.is_vote for player in self.red_team + self.blue_team]):
             await self.channel.send(output["NotEnoughVote"][language])
             return
 
-        # TODO: 同票数がいる場合に再投票の処理
-        # TODO: 点数計算
+        # 同票数がいる場合に再投票
+        def is_revote(team: List[User]) -> bool:
+            votes = sorted([player.voted_from for player in team])
+            if votes == [0, 0, 1, 2, 2]:
+                for player in team:
+                    player.voted_from = 0
+                    if player.voted_from != 2:
+                        player.voted_to = -1
+                        player.is_vote = False
+                        player.is_votable = False
+                return True
+            if votes == [1, 1, 1, 1, 1]:
+                for player in team:
+                    player.voted_to = -1
+                    player.voted_from = 0
+                    player.is_vote = False
+                return True
+            return False
+
+        async def inform_revote(team: List[User]):
+            text: str = ""
+            for i, player in enumerate(team):
+                if player.is_votable:
+                    text += "Player {} : {}\n".format(
+                        i + 1, player.champion_name if player.champion_name is not None else player.display_name
+                    )
+            for player in team:
+                if not player.is_vote:
+                    await player.info.send("再投票が必要です。以下の候補者からもう一度選んでください。\n{}".format(text))
+
+        if is_revote(self.blue_team) or is_revote(self.red_team):
+            await self.channel.send("再投票が必要です。該当者には改めてDMで通知されます。")
+            await inform_revote(self.blue_team)
+            await inform_revote(self.red_team)
 
         await self.channel.send(output["AnnounceResult"][language])
+
+        # TODO: 点数計算
         # TODO: 画像を出力
-        # await self.channel.send(await self.get_current_status(False, True))
+        await self.channel.send(await self.get_current_status(False, True))
 
         self.progress.aggregate()
 
