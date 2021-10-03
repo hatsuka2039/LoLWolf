@@ -455,7 +455,7 @@ class Game(object):
                     player.champion_name,
                     player.info.mention if is_mention else player.info.display_name,
                     player.summoner_name,
-                    "voted" if player.is_vote else "not voted",
+                    "投票済み" if player.is_vote else "未投票",
                     output["werewolf"][language] if not is_blind and player.is_wolf else "",
                 )
             return text
