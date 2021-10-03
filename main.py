@@ -450,7 +450,7 @@ class Game(object):
                 return "Not exist"
             text = ""
             for i, player in enumerate(team):
-                text = "Player{} ({}):\t{} ({})\t{}\t{}\n".format(
+                text += "Player{} ({}):\t{} ({})\t{}\t{}\n".format(
                     i + 1,
                     player.champion_name,
                     player.info.mention if is_mention else player.info.display_name,
