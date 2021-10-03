@@ -450,13 +450,14 @@ class Game(object):
                 return "Not exist"
             text = ""
             for i, player in enumerate(team):
-                text += "Player{} ({}):\t".format(i + 1, player.champion_name)
-                text += player.info.mention if is_mention else f"{player.info.display_name}"
-                text += "({})".format(player.summoner_name)
-                text += "\t{}".format("voted" if player.is_vote else "not voted")
-                text += "\t" + output["werewolf"][language] if not is_blind and player.is_wolf else ""
-                text += "\n"
-            text += "\n"
+                text = "Player{} ({}):\t{} ({})\t{}\t{}\n".format(
+                    i + 1,
+                    player.champion_name,
+                    player.info.mention if is_mention else player.info.display_name,
+                    player.summoner_name,
+                    "voted" if player.is_vote else "not voted",
+                    output["werewolf"][language] if not is_blind and player.is_wolf else "",
+                )
             return text
 
         embed.add_field(name="Blue side (Left side)", value=loop_player(self.blue_team), inline=False)
