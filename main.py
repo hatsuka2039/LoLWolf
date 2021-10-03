@@ -9,8 +9,7 @@ from transitions import Machine
 from typing import List, Dict, Optional
 
 TOKEN = os.environ["DISCORD_TOKEN"]
-# RIOT_API_KEY = os.environ["RIOT_API_KEY"]
-RIOT_API_KEY = "RGAPI-476cb5df-154e-426c-bfaf-b47ca4e1023a"
+RIOT_API_KEY = os.environ["RIOT_API_KEY"]
 
 # TODO: 後々RiotAPIと連携してチャンピオンとリンクできるようにしたい
 # TODO: Discordの表示名を自動的にチャンピオン名に変更するようになるといいね
